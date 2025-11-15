@@ -1,0 +1,126 @@
+/* Custom CSS Styles */
+
+:root {
+    --primary-color: #4f46e5;
+    --secondary-color: #7c3aed;
+    --success-color: #10b981;
+    --warning-color: #f59e0b;
+    --error-color: #ef4444;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* Loading spinner */
+.spinner {
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid var(--primary-color);
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Fade in animation */
+.fade-in {
+    animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Code syntax highlighting enhancements */
+.monaco-editor {
+    border-radius: 8px;
+}
+
+/* File tree styling */
+.file-item {
+    transition: all 0.2s ease;
+}
+
+.file-item:hover {
+    transform: translateX(4px);
+}
+
+/* Chat message animations */
+.message {
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* Button hover effects */
+button {
+    transition: all 0.2s ease;
+}
+
+button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+button:active {
+    transform: translateY(0);
+}
+
+/* Status badge */
+.status-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.status-initializing {
+    background-color: #fef3c7;
+    color: #92400e;
+}
+
+.status-prd_approved {
+    background-color: #dbeafe;
+    color: #1e40af;
+}
+
+.status-backend_complete {
+    background-color: #d1fae5;
+    color: #065f46;
+}
+
+.status-complete {
+    background-color: #d1fae5;
+    color: #065f46;
+}

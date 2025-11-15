@@ -1,0 +1,1112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ERP Builder - AI Multi-Agent System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            color: #333;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 1rem 2rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .header h1 {
+            color: white;
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .chat-panel {
+            width: 35%;
+            background: white;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid #e5e7eb;
+        }
+
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+            align-items: flex-start;
+        }
+
+        .message {
+            padding: 1.25rem 1.5rem;
+            border-radius: 16px;
+            max-width: 85%;
+            animation: slideIn 0.4s ease;
+            line-height: 1.6;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.user {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            align-self: flex-end;
+            margin-left: auto;
+            font-size: 1rem;
+        }
+
+        .message.assistant {
+            background: white;
+            color: #1f2937;
+            align-self: flex-start;
+            border: 1px solid #e5e7eb;
+            font-size: 0.95rem;
+            text-align: left;
+        }
+
+        .message.assistant strong {
+            color: #667eea;
+        }
+
+        .message.assistant ul {
+            margin: 0.75rem 0;
+            padding-left: 1.5rem;
+            list-style: none;
+        }
+
+        .message.assistant li {
+            margin: 0.5rem 0;
+            color: #4b5563;
+            padding-left: 0.5rem;
+        }
+
+        .message.assistant code {
+            background: #f3f4f6;
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+        }
+
+        .message.status {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+            color: #92400e;
+            align-self: center;
+            text-align: center;
+            font-size: 0.9rem;
+            font-weight: 500;
+            border: 1px solid #fbbf24;
+            padding: 0.75rem 1.5rem;
+        }
+
+        .input-area {
+            padding: 1.5rem;
+            background: white;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        .input-wrapper {
+            display: flex;
+            gap: 1rem;
+            background: #f9fafb;
+            padding: 0.75rem;
+            border-radius: 12px;
+            border: 2px solid #e5e7eb;
+            transition: border-color 0.3s;
+            align-items: center;
+        }
+
+        .input-wrapper:focus-within {
+            border-color: #667eea;
+        }
+
+        #messageInput {
+            flex: 1;
+            border: none;
+            background: transparent;
+            font-size: 1rem;
+            outline: none;
+            padding: 0.5rem;
+        }
+
+        #sendBtn, #buildBtn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 0.75rem 2rem;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        #sendBtn:hover, #buildBtn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        #sendBtn:disabled, #buildBtn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        #buildBtn {
+            background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+        }
+
+        .preview-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #f9fafb;
+        }
+
+        .preview-header {
+            background: white;
+            padding: 1rem 2rem;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .preview-header h2 {
+            font-size: 1.1rem;
+            color: #333;
+        }
+
+        .file-tabs {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .file-tab {
+            padding: 0.5rem 1rem;
+            background: #f3f4f6;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background 0.2s;
+        }
+
+        .file-tab.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .preview-content {
+            flex: 1;
+            position: relative;
+            background: white;
+        }
+
+        #previewFrame {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: white;
+        }
+
+        .code-view {
+            width: 100%;
+            height: 100%;
+            padding: 2rem;
+            overflow: auto;
+            display: none;
+        }
+
+        .code-view.active {
+            display: block;
+        }
+
+        #codeViews {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .code-view pre {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 1.5rem;
+            border-radius: 8px;
+            overflow: auto;
+            white-space: pre-wrap; /* wrap long lines for responsiveness */
+            word-break: break-word;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        /* Markdown viewer for PM_TASKS.md, QA_REPORT.md */
+        .md-view {
+            width: 100%;
+            height: 100%;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 2.5rem;
+            background: linear-gradient(to bottom, #f9fafb 0%, #ffffff 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            line-height: 1.7;
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+        }
+        
+        .md-view h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin: 0 0 1.5rem 0;
+            padding-bottom: 0.75rem;
+            border-bottom: 3px solid #667eea;
+            color: #1f2937;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .md-view h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin: 2rem 0 1rem 0;
+            color: #374151;
+            padding-left: 0.75rem;
+            border-left: 4px solid #667eea;
+        }
+        
+        .md-view h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin: 1.5rem 0 0.75rem 0;
+            color: #4b5563;
+        }
+        
+        .md-view h4 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin: 1rem 0 0.5rem 0;
+            color: #6b7280;
+        }
+        
+        .md-view p {
+            margin: 0.75rem 0;
+            color: #374151;
+            font-size: 1rem;
+            line-height: 1.8;
+        }
+        
+        .md-view ul, .md-view ol {
+            padding-left: 2rem;
+            margin: 1rem 0;
+        }
+        
+        .md-view li {
+            margin: 0.5rem 0;
+            color: #4b5563;
+            line-height: 1.7;
+        }
+        
+        .md-view li::marker {
+            color: #667eea;
+            font-weight: 600;
+        }
+        
+        .md-view code {
+            background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+            padding: 0.25rem 0.5rem;
+            border-radius: 6px;
+            font-family: 'Courier New', 'Consolas', monospace;
+            font-size: 0.9em;
+            color: #dc2626;
+            border: 1px solid #e5e7eb;
+        }
+        
+        .md-view pre {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            color: #e2e8f0;
+            padding: 1.5rem;
+            border-radius: 12px;
+            overflow-x: auto;
+            margin: 1.5rem 0;
+            border: 1px solid #334155;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .md-view pre code {
+            background: none;
+            border: none;
+            padding: 0;
+            color: inherit;
+            font-size: 0.95rem;
+        }
+        
+        .md-view blockquote {
+            border-left: 4px solid #667eea;
+            padding: 1rem 1.25rem;
+            margin: 1.5rem 0;
+            background: linear-gradient(to right, rgba(102, 126, 234, 0.05) 0%, transparent 100%);
+            color: #4b5563;
+            font-style: italic;
+            border-radius: 0 8px 8px 0;
+        }
+        
+        .md-view strong {
+            color: #1f2937;
+            font-weight: 600;
+        }
+        
+        .md-view em {
+            color: #6b7280;
+        }
+        
+        .md-view hr {
+            border: none;
+            height: 2px;
+            background: linear-gradient(to right, transparent, #e5e7eb, transparent);
+            margin: 2rem 0;
+        }
+        
+        .md-view table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+        
+        .md-view th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 0.75rem;
+            text-align: left;
+            font-weight: 600;
+        }
+        
+        .md-view td {
+            padding: 0.75rem;
+            border-bottom: 1px solid #e5e7eb;
+            color: #374151;
+        }
+        
+        .md-view tr:hover {
+            background: #f9fafb;
+        }
+        
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .md-view {
+                padding: 1.5rem;
+            }
+            .md-view h1 {
+                font-size: 1.5rem;
+            }
+            .md-view h2 {
+                font-size: 1.25rem;
+            }
+            .md-view pre {
+                padding: 1rem;
+                font-size: 0.85rem;
+            }
+        }
+
+        .welcome {
+            text-align: center;
+            color: #6b7280;
+            padding: 4rem 2rem;
+        }
+
+        .welcome h2 {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .welcome p {
+            font-size: 1.1rem;
+            margin-bottom: 2rem;
+        }
+
+        .examples {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 2rem;
+        }
+
+        .example-btn {
+            padding: 0.75rem 1.5rem;
+            background: white;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .example-btn:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .quick-action-btn {
+            display: inline-block;
+            margin: 0.5rem 0.25rem;
+            padding: 0.5rem 1rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+
+        .quick-action-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .typing-indicator {
+            display: flex;
+            gap: 0.4rem;
+            align-items: center;
+            padding: 1rem 1.5rem;
+            background: white;
+            border-radius: 16px;
+            max-width: fit-content;
+            border: 1px solid #e5e7eb;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            background: #667eea;
+            border-radius: 50%;
+            animation: typingDot 1.4s infinite;
+        }
+
+        .typing-dot:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .typing-dot:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes typingDot {
+            0%, 60%, 100% {
+                transform: translateY(0);
+                opacity: 0.5;
+            }
+            30% {
+                transform: translateY(-10px);
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:1rem;">
+            <h1>🏢 ERP Builder - AI Multi-Agent System</h1>
+            <div style="display:flex; align-items:center; gap:0.5rem; color:#fff;">
+                <label for="projectSelect" style="font-size:0.9rem;">Project:</label>
+                <select id="projectSelect" style="padding:0.4rem 0.6rem; border-radius:6px; border:1px solid rgba(255,255,255,0.5); background:rgba(255,255,255,0.2); color:#fff;"></select>
+                <button id="newProjectBtn" class="example-btn" style="background:rgba(255,255,255,0.2); color:#fff; border-color:rgba(255,255,255,0.6);" onclick="createNewProject()">New Project</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Chat Panel -->
+        <div class="chat-panel">
+            <div class="messages" id="messages">
+                <div class="welcome">
+                    <h2>Build ERP Systems with AI Agents 🤖</h2>
+                    <p>Specialized in Enterprise Resource Planning - Inventory, Sales, HR, Finance & More</p>
+                    <div class="examples">
+                        <button class="example-btn" onclick="useExample('I need an inventory management system')">Inventory System</button>
+                        <button class="example-btn" onclick="useExample('Build a sales order management system')">Sales Orders</button>
+                        <button class="example-btn" onclick="useExample('Create an HR management system')">HR System</button>
+                    </div>
+                </div>
+            </div>
+            <div class="input-area">
+                <div class="input-wrapper">
+                    <input 
+                        type="text" 
+                        id="messageInput" 
+                        placeholder="Describe your ERP system (Inventory, Sales, HR, etc)..."
+                        onkeypress="handleKeyPress(event)"
+                    >
+                    <button id="sendBtn" onclick="sendMessage()">
+                        <span id="btnText">Send</span>
+                    </button>
+                    <button id="buildBtn" onclick="buildNow()">Build Now</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Preview Panel -->
+        <div class="preview-panel">
+            <div class="preview-header">
+                <h2>Live Preview</h2>
+                <div class="file-tabs" id="fileTabs"></div>
+            </div>
+            <div class="preview-content">
+                <iframe id="previewFrame" sandbox="allow-scripts allow-same-origin"></iframe>
+                <div id="codeViews"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    let ws = null;
+        let projectId = null;
+        let currentFiles = {};
+        let isGenerating = false;
+        let restoring = false;
+
+        // Connect to WebSocket
+        function connect() {
+            ws = new WebSocket(`ws://${window.location.host}/ws/chat`);
+            
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                handleMessage(data);
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                addMessage('Connection error. Please refresh.', 'status');
+            };
+
+            ws.onclose = () => {
+                console.log('WebSocket closed');
+                setTimeout(connect, 3000);
+            };
+        }
+
+        let typingIndicator = null;
+
+        function handleMessage(data) {
+            // Remove typing indicator if present
+            if (typingIndicator) {
+                typingIndicator.remove();
+                typingIndicator = null;
+            }
+
+            switch(data.type) {
+                case 'pm_thinking':
+                    showTypingIndicator();
+                    break;
+                case 'pm_response':
+                    addMessage(data.content, 'assistant');
+                    // Check if PM is ready to start
+                    if (data.content.includes('Give me a moment') || data.content.includes('[READY]')) {
+                        isGenerating = true;
+                    } else {
+                        isGenerating = false;
+                        updateSendButton();
+                    }
+                    break;
+                case 'status':
+                    addMessage(data.content, 'status');
+                    break;
+                case 'file_created':
+                    currentFiles[data.file] = data.content;
+                    addMessage(`✅ Created: ${data.file}`, 'status');
+                    updateFileTabs();
+                    break;
+                case 'complete':
+                    addMessage(`🎉 ${data.description}`, 'assistant');
+                    updatePreview();
+                    isGenerating = false;
+                    updateSendButton();
+                    break;
+                case 'error':
+                    addMessage(`❌ ${data.content}`, 'status');
+                    isGenerating = false;
+                    updateSendButton();
+                    break;
+            }
+        }
+
+        function showTypingIndicator() {
+            const messages = document.getElementById('messages');
+            typingIndicator = document.createElement('div');
+            typingIndicator.className = 'typing-indicator';
+            typingIndicator.innerHTML = `
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <span style="margin-left: 0.5rem; color: #6b7280; font-size: 0.9rem;">PM Agent is thinking...</span>
+            `;
+            messages.appendChild(typingIndicator);
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            
+            if (!message || isGenerating) return;
+            
+            addMessage(message, 'user');
+            input.value = '';
+            
+            isGenerating = true;
+            updateSendButton();
+            
+            currentFiles = {};
+            
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    message: message,
+                    project_id: projectId
+                }));
+            }
+        }
+
+        function updateSendButton() {
+            const btn = document.getElementById('sendBtn');
+            const buildBtn = document.getElementById('buildBtn');
+            const btnText = document.getElementById('btnText');
+            
+            if (isGenerating) {
+                btn.disabled = true;
+                buildBtn.disabled = true;
+                btnText.innerHTML = '<div class="loading"></div>';
+            } else {
+                btn.disabled = false;
+                buildBtn.disabled = false;
+                btnText.textContent = 'Send';
+            }
+        }
+
+        function buildNow() {
+            if (isGenerating) return;
+            isGenerating = true;
+            updateSendButton();
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    message: '__FORCE_BUILD__',
+                    project_id: projectId
+                }));
+            }
+        }
+
+        function addMessage(content, type) {
+            const messages = document.getElementById('messages');
+            const msg = document.createElement('div');
+            msg.className = `message ${type}`;
+            
+            if (type === 'assistant') {
+                // Format PM Agent responses nicely
+                msg.innerHTML = formatAssistantMessage(content);
+            } else {
+                msg.textContent = content;
+            }
+            
+            messages.appendChild(msg);
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        function formatAssistantMessage(content) {
+            // Build clean HTML with proper grouping of numbered questions
+            const lines = content.split(/\r?\n/);
+            const blocks = [];
+            let currentNum = null;
+            let currentParts = [];
+
+            const flushCurrent = () => {
+                if (currentNum !== null) {
+                    const text = currentParts.join(' ').trim();
+                    blocks.push({ type: 'numbered', num: currentNum, text });
+                    currentNum = null;
+                    currentParts = [];
+                }
+            };
+
+            for (let raw of lines) {
+                const line = raw.trim();
+                const m = line.match(/^(\d+)\.\s*(.*)$/);
+                if (m) {
+                    // New numbered question starts
+                    flushCurrent();
+                    currentNum = m[1];
+                    currentParts = [m[2]];
+                } else if (currentNum !== null) {
+                    // Continuation of current question until next number
+                    if (line.length) currentParts.push(line);
+                } else if (line.startsWith('- ')) {
+                    blocks.push({ type: 'bullet', text: line.slice(2) });
+                } else if (line.length) {
+                    blocks.push({ type: 'para', text: line });
+                }
+            }
+            flushCurrent();
+
+            // Render HTML
+            let html = '';
+            for (const b of blocks) {
+                if (b.type === 'numbered') {
+                    const t = b.text
+                        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+                    html += `<div style="margin: 0.75rem 0; padding: 0.75rem 1rem; background: #f9fafb; border-radius: 8px; border-left: 3px solid #667eea;">
+                                <strong style="color:#667eea;">${b.num}.</strong> ${t}
+                             </div>`;
+                } else if (b.type === 'bullet') {
+                    html += `<div style="margin: 0.35rem 0; padding-left: 1.25rem; color:#4b5563;">• ${b.text}</div>`;
+                } else {
+                    let t = b.text
+                        .replace(/For example:/gi, '<strong style="color:#10b981;">For example:</strong>')
+                        .replace(/(Could you describe|Thank you|Great!|Excellent!|Excellent choice!)/g, '<strong style="color:#667eea;">$1</strong>');
+                    html += `<p style="margin: 0.25rem 0 0.5rem 0;">${t}</p>`;
+                }
+            }
+
+            // Add quick actions on ERP specialization notice
+            if (content.includes('specializes in ERP') || content.includes('Enterprise Resource Planning')) {
+                html += `
+                <div style="margin-top: 1rem;">
+                    <strong style="color: #667eea;">Try these instead:</strong><br/>
+                    <button class="quick-action-btn" onclick="useExample('I need an inventory management system')">📦 Inventory System</button>
+                    <button class="quick-action-btn" onclick="useExample('Build a sales order management system')">💰 Sales Orders</button>
+                    <button class="quick-action-btn" onclick="useExample('Create an HR management system')">👥 HR System</button>
+                </div>`;
+            }
+
+            return html;
+        }
+
+        function updateFileTabs() {
+            const tabsContainer = document.getElementById('fileTabs');
+            tabsContainer.innerHTML = '';
+            
+            ['Preview', ...Object.keys(currentFiles)].forEach((name, index) => {
+                const tab = document.createElement('button');
+                tab.className = 'file-tab' + (index === 0 ? ' active' : '');
+                tab.textContent = name;
+                tab.onclick = () => switchTab(name);
+                tabsContainer.appendChild(tab);
+            });
+        }
+
+        function switchTab(name) {
+            document.querySelectorAll('.file-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.textContent === name);
+            });
+            
+            const frame = document.getElementById('previewFrame');
+            const codeViews = document.getElementById('codeViews');
+            
+            if (name === 'Preview') {
+                frame.style.display = 'block';
+                codeViews.innerHTML = '';
+            } else {
+                frame.style.display = 'none';
+                const content = currentFiles[name] || '';
+                if (name.toLowerCase().endsWith('.md')) {
+                    codeViews.innerHTML = `
+                        <div class="md-view">${renderMarkdown(content)}</div>
+                    `;
+                } else {
+                    codeViews.innerHTML = `
+                        <div class="code-view active">
+                            <pre>${escapeHtml(content)}</pre>
+                        </div>
+                    `;
+                }
+            }
+        }
+
+        function updatePreview() {
+            const frame = document.getElementById('previewFrame');
+            // Prefer server-hosted preview if files are saved already
+            if (projectId) {
+                frame.src = `/projects/${projectId}/index.html`;
+            } else {
+                const html = currentFiles['index.html'] || '';
+                const css = currentFiles['style.css'] || '';
+                const js = currentFiles['app.js'] || '';
+                const content = html.replace(
+                    '</head>',
+                    `<style>${css}</style></head>`
+                ).replace(
+                    '</body>',
+                    `<script>${js}<\/script></body>`
+                );
+                const blob = new Blob([content], { type: 'text/html' });
+                frame.src = URL.createObjectURL(blob);
+            }
+        }
+
+        function escapeHtml(text) {
+            return text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function renderMarkdown(md) {
+            // Enhanced MD renderer with better formatting
+            const esc = (s) => s
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+
+            // Code blocks with language support
+            md = md.replace(/```(\w+)?\n([\s\S]*?)```/g, (m, lang, code) => {
+                return `<pre><code>${esc(code.trim())}</code></pre>`;
+            });
+
+            // Inline code
+            md = md.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+            // Horizontal rules
+            md = md.replace(/^(?:---|\*\*\*|___)$/gm, '<hr>');
+
+            // Headings with support for #### and #####
+            md = md.replace(/^#####\s+(.+)$/gm, '<h5>$1</h5>');
+            md = md.replace(/^####\s+(.+)$/gm, '<h4>$1</h4>');
+            md = md.replace(/^###\s+(.+)$/gm, '<h3>$1</h3>');
+            md = md.replace(/^##\s+(.+)$/gm, '<h2>$1</h2>');
+            md = md.replace(/^#\s+(.+)$/gm, '<h1>$1</h1>');
+
+            // Bold and italic (order matters: bold first)
+            md = md.replace(/\*\*\*([^*]+)\*\*\*/g, '<strong><em>$1</em></strong>');
+            md = md.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+            md = md.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+            md = md.replace(/___([^_]+)___/g, '<strong><em>$1</em></strong>');
+            md = md.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+            md = md.replace(/_([^_]+)_/g, '<em>$1</em>');
+
+            // Blockquotes (multi-line support)
+            md = md.replace(/^>\s+(.+)$/gm, '<blockquote>$1</blockquote>');
+            md = md.replace(/(<blockquote>.*<\/blockquote>\n?)+/g, (m) => {
+                const content = m.replace(/<\/?blockquote>/g, '').trim();
+                return `<blockquote>${content}</blockquote>`;
+            });
+
+            // Task lists
+            md = md.replace(/^- \[( |x)\] (.*)$/gm, (m, check, text) => {
+                const checked = check === 'x' ? 'checked' : '';
+                return `<li style="list-style: none;"><input type="checkbox" ${checked} disabled> ${text}</li>`;
+            });
+
+            // Unordered lists
+            md = md.replace(/^(?:- |\* )(.*)$/gm, '<li>$1</li>');
+            md = md.replace(/(<li>.*<\/li>\n?)+/g, (m) => `<ul>${m.replace(/\n/g,'')}</ul>`);
+
+            // Ordered lists
+            md = md.replace(/^(\d+)\. (.*)$/gm, '<li>$2</li>');
+            md = md.replace(/(<li>.*<\/li>\n?)+/g, (m) => {
+                if (/<ul>/.test(m)) return m;
+                return `<ol>${m.replace(/\n/g,'')}</ol>`;
+            });
+
+            // Links
+            md = md.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" style="color: #667eea; text-decoration: underline;">$1</a>');
+
+            // Paragraphs (lines not already HTML)
+            md = md.split(/\n\n+/).map(block => {
+                if (/^\s*<\/?(h\d|ul|ol|li|pre|blockquote|p|code|hr|table)/i.test(block.trim())) return block;
+                if (block.trim().length === 0) return '';
+                return `<p>${block.trim()}</p>`;
+            }).join('\n');
+
+            return md;
+        }
+
+        function useExample(text) {
+            document.getElementById('messageInput').value = text;
+            sendMessage();
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter' && !isGenerating) {
+                sendMessage();
+            }
+        }
+
+        async function loadProjects() {
+            try {
+                const res = await fetch('/api/projects');
+                const data = await res.json();
+                const sel = document.getElementById('projectSelect');
+                sel.innerHTML = '';
+                // Don't add placeholder if we have projects
+                (data.projects || []).forEach(p => {
+                    const o = document.createElement('option');
+                    o.value = p.id;
+                    o.textContent = `${p.id}${p.last_updated ? ' • ' + new Date(p.last_updated).toLocaleString() : ''}`;
+                    sel.appendChild(o);
+                });
+                sel.onchange = () => {
+                    if (sel.value) switchProject(sel.value);
+                };
+                return data.projects || [];
+            } catch (e) {
+                console.warn('Could not load projects', e);
+                return [];
+            }
+        }
+
+        async function restoreProject(id) {
+            restoring = true;
+            try {
+                // Load chat
+                const chatRes = await fetch(`/api/projects/${id}/chat`);
+                const chat = await chatRes.json();
+                const history = chat.history || [];
+                const messagesEl = document.getElementById('messages');
+                messagesEl.innerHTML = '';
+                // Repopulate chat
+                history.forEach(m => addMessage(m.content, m.role === 'user' ? 'user' : 'assistant'));
+                // Load files
+                const filesRes = await fetch(`/api/projects/${id}/files`);
+                const files = await filesRes.json();
+                currentFiles = files.files || {};
+                updateFileTabs();
+                // Update preview if index exists
+                if (currentFiles['index.html']) {
+                    updatePreview();
+                }
+            } catch (e) {
+                console.warn('Restore failed', e);
+            } finally {
+                restoring = false;
+            }
+        }
+
+        function createNewProject() {
+            projectId = 'project_' + Date.now();
+            localStorage.setItem('projectId', projectId);
+            const sel = document.getElementById('projectSelect');
+            // Ensure the new id appears in the dropdown immediately
+            let opt = [...sel.options].find(o => o.value === projectId);
+            if (!opt) {
+                opt = document.createElement('option');
+                opt.value = projectId;
+                opt.textContent = projectId + ' • (new)';
+                sel.appendChild(opt);
+            }
+            sel.value = projectId;
+            // Reset UI
+            document.getElementById('messages').innerHTML = `
+                <div class="welcome">
+                    <h2>Build ERP Systems with AI Agents 🤖</h2>
+                    <p>Specialized in Enterprise Resource Planning - Inventory, Sales, HR, Finance & More</p>
+                    <div class="examples">
+                        <button class="example-btn" onclick="useExample('I need an inventory management system')">Inventory System</button>
+                        <button class="example-btn" onclick="useExample('Build a sales order management system')">Sales Orders</button>
+                        <button class="example-btn" onclick="useExample('Create an HR management system')">HR System</button>
+                    </div>
+                </div>`;
+            currentFiles = {};
+            updateFileTabs();
+            document.getElementById('previewFrame').src = 'about:blank';
+        }
+
+        async function switchProject(id) {
+            if (!id) return;
+            projectId = id;
+            localStorage.setItem('projectId', projectId);
+            await restoreProject(projectId);
+        }
+
+        async function init() {
+            // Load existing projects first
+            const projects = await loadProjects();
+            const stored = localStorage.getItem('projectId');
+            const sel = document.getElementById('projectSelect');
+            
+            if (stored && projects.some(p => p.id === stored)) {
+                // Restore last selected project
+                projectId = stored;
+            } else if (projects.length > 0) {
+                // Default to most recently updated project
+                projectId = projects[0].id;
+                localStorage.setItem('projectId', projectId);
+            } else {
+                // No saved projects: create a new one
+                projectId = 'project_' + Date.now();
+                localStorage.setItem('projectId', projectId);
+                const opt = document.createElement('option');
+                opt.value = projectId;
+                opt.textContent = projectId + ' • (new)';
+                sel.appendChild(opt);
+            }
+            
+            // Set the dropdown to show the current project
+            sel.value = projectId;
+            
+            // Restore if the project exists on disk
+            if (projects.some(p => p.id === projectId)) {
+                await restoreProject(projectId);
+            }
+            connect();
+        }
+
+        // Initialize
+        init();
+    </script>
+</body>
+</html>
