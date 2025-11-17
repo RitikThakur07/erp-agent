@@ -50,3 +50,12 @@ logs/
 .DS_Store
 Thumbs.db
 generated_projects/
+.vercel/
+.vercel_build_output/
+.venv/
+venv/
+__pycache__/
+node_modules/
+*.db
+*.bin
+*.index

@@ -22,7 +22,9 @@ load_dotenv()
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 app = FastAPI(title="Multi-Agent Code Generator")
+from fastapi import FastAPI
 
+api = FastAPI()
 # CORS
 app.add_middleware(
     CORSMiddleware,
@@ -36,10 +38,31 @@ app.add_middleware(
 PROJECTS_DIR = Path("generated_projects")
 PROJECTS_DIR.mkdir(exist_ok=True)
 
+# Agents storage
+AGENTS_DIR = Path("agents_data")
+AGENTS_DIR.mkdir(exist_ok=True)
+AGENTS_FILE = AGENTS_DIR / "agents.json"
+
 # Store conversation history per project (in-memory cache)
 conversation_history: dict[str, list] = {}
 # Track PM questioning rounds to avoid long back-and-forth
 pm_rounds: dict[str, int] = {}
+
+def load_agents() -> list:
+    """Load custom agents from disk."""
+    try:
+        if AGENTS_FILE.exists():
+            return json.loads(AGENTS_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return []
+
+def save_agents(agents: list):
+    """Save custom agents to disk."""
+    try:
+        AGENTS_FILE.write_text(json.dumps(agents, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
 
 def load_history(project_id: str) -> list:
     """Load conversation history from disk if available."""
@@ -79,28 +102,58 @@ async def root():
 
 
 async def call_gemini(prompt: str) -> str:
-    """Call Gemini API in thread pool"""
+    """Call Gemini API with optimized settings and safety handling"""
     def _sync_call():
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        model = genai.GenerativeModel(
+            'gemini-2.0-flash-exp',
+            generation_config={
+                'temperature': 0.7,
+                'top_p': 0.95,
+                'top_k': 40,
+                'max_output_tokens': 2048,
+            },
+            safety_settings={
+                'HARM_CATEGORY_HARASSMENT': 'BLOCK_NONE',
+                'HARM_CATEGORY_HATE_SPEECH': 'BLOCK_NONE',
+                'HARM_CATEGORY_SEXUALLY_EXPLICIT': 'BLOCK_NONE',
+                'HARM_CATEGORY_DANGEROUS_CONTENT': 'BLOCK_NONE',
+            }
+        )
         response = model.generate_content(prompt)
+        
+        # Handle blocked responses
+        if not response.parts:
+            if hasattr(response, 'prompt_feedback'):
+                return f"I apologize, but I cannot process this request. Reason: {response.prompt_feedback}"
+            return "I apologize, but I cannot generate a response for this request. Please try rephrasing."
+        
         return response.text
     
-    return await asyncio.to_thread(_sync_call)
+    try:
+        return await asyncio.wait_for(asyncio.to_thread(_sync_call), timeout=30.0)
+    except asyncio.TimeoutError:
+        return "Request timeout. Please try again with a simpler request."
+    except Exception as e:
+        print(f"❌ Gemini API Error: {e}")
+        return f"Error generating response. Please try again."
 
 
 @app.websocket("/ws/chat")
 async def websocket_chat(websocket: WebSocket):
     """WebSocket for multi-agent workflow"""
     await websocket.accept()
+    print("✅ WebSocket connection accepted")
     # Defer project_id until first message; allows client to reconnect to existing project
     project_id: str | None = None
     
     try:
         while True:
             # Receive message
+            print("📩 Waiting for message...")
             data = await websocket.receive_json()
             message = data.get("message", "")
             client_pid = (data.get("project_id") or "").strip() or None
+            print(f"📨 Received message: {message[:50]}... (project: {client_pid})")
             # Initialize project context on first message
             if project_id is None:
                 project_id = client_pid or f"project_{int(datetime.utcnow().timestamp()*1000)}"
@@ -125,69 +178,23 @@ async def websocket_chat(websocket: WebSocket):
                 "content": "🤔 PM Agent analyzing requirements..."
             })
             
-            pm_prompt = f"""You are a Project Manager AI Agent SPECIALIZED in ERP (Enterprise Resource Planning) systems.
+            pm_prompt = f"""You are a PM Agent for ERP systems (Inventory, CRM, HR, Finance, Sales, etc).
 
-Your ONLY focus: ERP systems like Inventory, Sales, HR, Finance, Manufacturing, CRM, Warehouse, Orders, etc.
+User request: "{message}"
 
-Conversation so far:
-{format_conversation(conversation_history[project_id])}
+Rules:
+1. If NOT ERP-related: Reject politely, suggest ERP examples
+2. If ERP but needs details: Ask 2-3 brief questions
+3. If complete or user says "build/start/go": Say "Thank you! Give me a moment..." [READY]
 
-Current user message: "{message}"
-
-FIRST: Check if this is an ERP-related request.
-
-ERP systems include:
-- Inventory Management
-- Sales & Order Management
-- HR & Payroll
-- Finance & Accounting
-- Manufacturing & Production
-- Warehouse Management
-- Customer Relationship Management (CRM)
-- Supply Chain Management
-- Purchase Management
-- Asset Management
-- Project Management
-- Reporting & Analytics for business
-
-NON-ERP examples (REJECT these):
-- Todo apps, calculators, timers
-- Gaming apps, entertainment
-- Social media, chat apps
-- Generic landing pages, portfolios
-- Weather apps, news readers
-- Simple utilities
-
-YOUR RESPONSE:
-
-1. If request is NOT ERP-related, respond EXACTLY:
-   "I apologize, but our team specializes in ERP (Enterprise Resource Planning) systems. We help build business management applications like Inventory, Sales, HR, Finance, Manufacturing, etc. 
-   
-   Could you describe an ERP system you'd like to build? For example:
-   - Inventory management system
-   - Sales order processing
-   - HR management system
-   - Warehouse management"
-
-2. If request IS ERP-related but needs more details, ask at most one round with 2-3 concise questions about:
-   - Business modules needed
-   - User roles and permissions
-   - Data entities to manage
-   - Key workflows
-   - Reporting needs
-
-3. If requirements are COMPLETE for an ERP system OR the user says to start (e.g., "build now", "start", "go ahead"), respond:
-    "Thank you! I have all the requirements. Give me a moment to coordinate with my development team..." [READY]
-
-Important constraints:
-- Keep the questioning to a single round. After one back-and-forth, proceed with [READY].
-
-Be professional and guide users toward ERP solutions."""
+Keep response under 150 words. One question round max."""
 
             if force_build:
                 pm_response = "Thank you! I have all the requirements. Give me a moment to coordinate with my development team... [READY]"
             else:
+                print("🤖 Calling Gemini API for PM response...")
                 pm_response = await call_gemini(pm_prompt)
+                print(f"✅ PM response received: {pm_response[:100]}...")
             
             # Add PM response to history
             conversation_history[project_id].append({"role": "assistant", "content": pm_response})
@@ -207,185 +214,149 @@ Be professional and guide users toward ERP solutions."""
                 else:
                     pm_rounds[project_id] = pm_rounds.get(project_id, 0) + 1
             
-            if ready:
-                # Requirements complete - start agent workflow
-                await websocket.send_json({
-                    "type": "status",
-                    "content": "📋 PM Agent creating task assignments..."
-                })
-            else:
+            if not ready:
                 # Wait for user's next answer
                 continue
-                
-                # Generate PM task document
-                requirements = "\n".join([msg["content"] for msg in conversation_history[project_id] if msg["role"] == "user"])
-                
-                pm_doc_prompt = f"""Create a PM task assignment document for building this application:
+            
+            # Requirements complete - start agent workflow
+            await websocket.send_json({
+                "type": "status",
+                "content": "📋 PM Agent creating task assignments..."
+            })
+            
+            # Generate PM task document
+            requirements = "\n".join([msg["content"] for msg in conversation_history[project_id] if msg["role"] == "user"])
+            
+            pm_doc_prompt = f"""Create PM doc for: {requirements[:200]}
 
-User Requirements:
-{requirements}
+Format:
+# Project: [Name]
+## Requirements: [3-5 key items]
+## Tasks:
+- Backend: [3 tasks]
+- Frontend: [3 tasks]  
+- QA: [2 tasks]
 
-Generate a markdown document with:
+Keep under 200 words."""
 
-# Project Management Document
+            pm_doc = await call_gemini(pm_doc_prompt)
+            
+            # Save PM document
+            project_dir = PROJECTS_DIR / project_id
+            project_dir.mkdir(exist_ok=True)
+            
+            pm_file = project_dir / "PM_TASKS.md"
+            with open(pm_file, "w", encoding="utf-8") as f:
+                f.write(pm_doc)
+            
+            await websocket.send_json({
+                "type": "file_created",
+                "file": "PM_TASKS.md",
+                "content": pm_doc
+            })
+            
+            # Backend Agent
+            await websocket.send_json({
+                "type": "status",
+                "content": "⚙️ Backend Agent generating server code..."
+            })
+            
+            backend_prompt = f"""Create FastAPI backend for: {requirements[:300]}
 
-## Project Overview
-[Brief description]
+Return ONLY valid JSON:
+{{"file": "backend.py", "content": "# FastAPI code with endpoints, models, CRUD"}}
 
-## Requirements Summary
-[List of key requirements]
+Keep code under 200 lines."""
 
-## Task Assignments
-
-### Backend Agent Tasks
-- [ ] Task 1
-- [ ] Task 2
-...
-
-### Frontend Agent Tasks
-- [ ] Task 1
-- [ ] Task 2
-...
-
-### QA Agent Tasks
-- [ ] Task 1
-- [ ] Task 2
-...
-
-Keep it clear and actionable."""
-
-                pm_doc = await call_gemini(pm_doc_prompt)
-                
-                # Save PM document
-                project_dir = PROJECTS_DIR / project_id
-                project_dir.mkdir(exist_ok=True)
-                
-                pm_file = project_dir / "PM_TASKS.md"
-                with open(pm_file, "w", encoding="utf-8") as f:
-                    f.write(pm_doc)
+            backend_response = await call_gemini(backend_prompt)
+            backend_json = extract_json(backend_response)
+            
+            if backend_json:
+                backend_file = project_dir / backend_json["file"]
+                with open(backend_file, "w", encoding="utf-8") as f:
+                    f.write(backend_json["content"])
                 
                 await websocket.send_json({
                     "type": "file_created",
-                    "file": "PM_TASKS.md",
-                    "content": pm_doc
+                    "file": backend_json["file"],
+                    "content": backend_json["content"]
                 })
-                
-                # Backend Agent
-                await websocket.send_json({
-                    "type": "status",
-                    "content": "⚙️ Backend Agent generating server code..."
-                })
-                
-                backend_prompt = f"""You are a Backend Development AI Agent. Generate backend code based on:
+            
+            # Frontend Agent
+            await websocket.send_json({
+                "type": "status",
+                "content": "🎨 Frontend Agent designing UI..."
+            })
+            
+            frontend_prompt = f"""Create modern responsive UI for: {requirements[:300]}
 
-{requirements}
+Return ONLY valid JSON:
+{{"files": [{{"name": "index.html", "content": "..."}}, {{"name": "style.css", "content": "..."}}, {{"name": "app.js", "content": "..."}}]}}
 
-Create a simple FastAPI backend with:
-- API endpoints
-- Data models
-- CRUD operations
+Use gradients, modern CSS. Keep each file under 150 lines."""
 
-Return JSON:
-{{
-  "file": "backend.py",
-  "content": "# Complete FastAPI code..."
-}}"""
-
-                backend_response = await call_gemini(backend_prompt)
-                backend_json = extract_json(backend_response)
-                
-                if backend_json:
-                    backend_file = project_dir / backend_json["file"]
-                    with open(backend_file, "w", encoding="utf-8") as f:
-                        f.write(backend_json["content"])
+            frontend_response = await call_gemini(frontend_prompt)
+            frontend_json = extract_json(frontend_response)
+            
+            if frontend_json and "files" in frontend_json:
+                for file_data in frontend_json["files"]:
+                    file_path = project_dir / file_data["name"]
+                    with open(file_path, "w", encoding="utf-8") as f:
+                        f.write(file_data["content"])
                     
                     await websocket.send_json({
                         "type": "file_created",
-                        "file": backend_json["file"],
-                        "content": backend_json["content"]
+                        "file": file_data["name"],
+                        "content": file_data["content"]
                     })
-                
-                # Frontend Agent
-                await websocket.send_json({
-                    "type": "status",
-                    "content": "🎨 Frontend Agent designing UI..."
-                })
-                
-                frontend_prompt = f"""You are a Frontend Development AI Agent. Create a beautiful, modern web UI for:
+            
+            # QA Agent
+            await websocket.send_json({
+                "type": "status",
+                "content": "✅ QA Agent reviewing code..."
+            })
+            
+            qa_prompt = f"""QA Report for {requirements[:150]}
 
-{requirements}
+Provide:
+- 3 test cases
+- Quality score (1-10)
+- 2 recommendations
 
-Generate HTML, CSS, JavaScript that:
-- Has a professional design with gradients and animations
-- Is fully responsive
-- Has smooth interactions
-- Uses modern CSS (flexbox, grid)
+Keep under 150 words."""
 
-Return JSON with files array:
-{{
-  "files": [
-    {{"name": "index.html", "content": "..."}},
-    {{"name": "style.css", "content": "..."}},
-    {{"name": "app.js", "content": "..."}}
-  ]
-}}"""
-
-                frontend_response = await call_gemini(frontend_prompt)
-                frontend_json = extract_json(frontend_response)
-                
-                if frontend_json and "files" in frontend_json:
-                    for file_data in frontend_json["files"]:
-                        file_path = project_dir / file_data["name"]
-                        with open(file_path, "w", encoding="utf-8") as f:
-                            f.write(file_data["content"])
-                        
-                        await websocket.send_json({
-                            "type": "file_created",
-                            "file": file_data["name"],
-                            "content": file_data["content"]
-                        })
-                
-                # QA Agent
-                await websocket.send_json({
-                    "type": "status",
-                    "content": "✅ QA Agent reviewing code..."
-                })
-                
-                qa_prompt = f"""You are a QA Testing AI Agent. Review the generated code and create:
-
-1. Test cases
-2. Quality report
-3. Recommendations
-
-Return markdown format."""
-
-                qa_response = await call_gemini(qa_prompt)
-                
-                qa_file = project_dir / "QA_REPORT.md"
-                with open(qa_file, "w", encoding="utf-8") as f:
-                    f.write(qa_response)
-                
-                await websocket.send_json({
-                    "type": "file_created",
-                    "file": "QA_REPORT.md",
-                    "content": qa_response
-                })
-                
-                # Complete
-                await websocket.send_json({
-                    "type": "complete",
-                    "description": "All agents completed their tasks!",
-                    "preview_url": f"/projects/{project_id}/index.html"
-                })
+            qa_response = await call_gemini(qa_prompt)
+            
+            qa_file = project_dir / "QA_REPORT.md"
+            with open(qa_file, "w", encoding="utf-8") as f:
+                f.write(qa_response)
+            
+            await websocket.send_json({
+                "type": "file_created",
+                "file": "QA_REPORT.md",
+                "content": qa_response
+            })
+            
+            # Complete
+            await websocket.send_json({
+                "type": "complete",
+                "description": "All agents completed their tasks!",
+                "preview_url": f"/projects/{project_id}/index.html"
+            })
                 
     except WebSocketDisconnect:
         print("Client disconnected")
     except Exception as e:
-        print(f"Error: {e}")
-        await websocket.send_json({
-            "type": "error",
-            "content": f"Error: {str(e)}"
-        })
+        print(f"❌ Error: {e}")
+        import traceback
+        traceback.print_exc()
+        try:
+            await websocket.send_json({
+                "type": "error",
+                "content": f"Error: {str(e)}"
+            })
+        except:
+            pass
 
 
 def format_conversation(history):
@@ -459,6 +430,80 @@ async def get_project_chat(project_id: str):
     """Return stored chat history for a project."""
     hist = load_history(project_id)
     return JSONResponse({"history": hist})
+
+
+# ============ AGENT MANAGEMENT API ============
+
+class AgentCreate(BaseModel):
+    name: str
+    role: str
+    model: str
+    prompt: str
+
+
+@app.get("/api/agents")
+async def list_agents():
+    """List all custom agents."""
+    agents = load_agents()
+    return JSONResponse({"agents": agents})
+
+
+@app.get("/api/agents/{agent_id}")
+async def get_agent(agent_id: str):
+    """Get a specific agent by ID."""
+    agents = load_agents()
+    agent = next((a for a in agents if a["id"] == agent_id), None)
+    if not agent:
+        return JSONResponse({"error": "Agent not found"}, status_code=404)
+    return JSONResponse(agent)
+
+
+@app.post("/api/agents")
+async def create_agent(agent: AgentCreate):
+    """Create a new custom agent."""
+    agents = load_agents()
+    
+    # Generate unique ID
+    agent_id = f"agent_{int(datetime.utcnow().timestamp() * 1000)}"
+    
+    new_agent = {
+        "id": agent_id,
+        "name": agent.name,
+        "role": agent.role,
+        "model": agent.model,
+        "prompt": agent.prompt,
+        "created_at": datetime.utcnow().isoformat() + "Z"
+    }
+    
+    agents.append(new_agent)
+    save_agents(agents)
+    
+    return JSONResponse(new_agent, status_code=201)
+
+
+@app.delete("/api/agents/{agent_id}")
+async def delete_agent(agent_id: str):
+    """Delete a custom agent."""
+    agents = load_agents()
+    agents = [a for a in agents if a["id"] != agent_id]
+    save_agents(agents)
+    return JSONResponse({"message": "Agent deleted successfully"})
+
+
+# ============ PAGE ROUTES ============
+
+@app.get("/create-agent")
+async def create_agent_page():
+    """Serve create agent page."""
+    with open("static/create-agent.html", "r", encoding="utf-8") as f:
+        return HTMLResponse(content=f.read())
+
+
+@app.get("/automation")
+async def automation_page():
+    """Serve automation page."""
+    with open("static/automation.html", "r", encoding="utf-8") as f:
+        return HTMLResponse(content=f.read())
 
 
 # Mount static files

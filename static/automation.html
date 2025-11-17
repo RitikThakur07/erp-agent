@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Automation - ERP Builder</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 1rem 2rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            color: white;
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 1.5rem;
+        }
+
+        .nav-links a {
+            color: white;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            transition: background 0.3s;
+            font-weight: 500;
+        }
+
+        .nav-links a:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .nav-links a.active {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 2rem;
+        }
+
+        .page-title {
+            color: white;
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            font-weight: 700;
+        }
+
+        .page-subtitle {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 1.1rem;
+            margin-bottom: 3rem;
+        }
+
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 2.5rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            margin-bottom: 2rem;
+        }
+
+        .card h2 {
+            font-size: 1.8rem;
+            margin-bottom: 1rem;
+            color: #1f2937;
+        }
+
+        .card p {
+            color: #6b7280;
+            margin-bottom: 1.5rem;
+        }
+
+        .agent-selector {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .agent-chip {
+            padding: 1rem 1.5rem;
+            background: #f9fafb;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+            font-weight: 500;
+        }
+
+        .agent-chip:hover {
+            border-color: #cbd5e1;
+            transform: translateY(-2px);
+        }
+
+        .agent-chip.selected {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: #667eea;
+            transform: scale(1.05);
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .form-group textarea {
+            width: 100%;
+            padding: 1rem;
+            border: 2px solid #e5e7eb;
+            border-radius: 10px;
+            font-size: 1rem;
+            min-height: 150px;
+            resize: vertical;
+            font-family: inherit;
+            transition: all 0.3s;
+        }
+
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 1rem 2.5rem;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .workflow-visual {
+            background: linear-gradient(135deg, #f9fafb 0%, #ffffff 100%);
+            border: 2px dashed #cbd5e1;
+            border-radius: 12px;
+            padding: 2rem;
+            min-height: 200px;
+        }
+
+        .workflow-step {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem;
+            background: white;
+            border-radius: 10px;
+            margin-bottom: 1rem;
+            border-left: 4px solid #667eea;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .workflow-step .icon {
+            font-size: 1.5rem;
+        }
+
+        .workflow-step .content {
+            flex: 1;
+        }
+
+        .workflow-step .agent-name {
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 0.25rem;
+        }
+
+        .workflow-step .status {
+            color: #6b7280;
+            font-size: 0.9rem;
+        }
+
+        .workflow-arrow {
+            text-align: center;
+            color: #cbd5e1;
+            font-size: 1.5rem;
+            margin: 0.5rem 0;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: #9ca3af;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🏢 ERP Builder - AI Multi-Agent System</h1>
+        <nav class="nav-links">
+            <a href="/">💻 Code Builder</a>
+            <a href="/create-agent">🤖 Create Agent</a>
+            <a href="/automation" class="active">⚡ Automation</a>
+        </nav>
+    </div>
+
+    <div class="container">
+        <h1 class="page-title">Workflow Automation</h1>
+        <p class="page-subtitle">Orchestrate multiple AI agents to work together on complex tasks</p>
+
+        <div class="card">
+            <h2>Configure Workflow</h2>
+            <p>Select the agents you want to participate in this automated workflow</p>
+            
+            <div class="agent-selector" id="agentSelector">
+                <!-- Agents will be loaded here -->
+            </div>
+
+            <div class="form-group">
+                <label for="workflowInput">Workflow Task Description</label>
+                <textarea id="workflowInput" placeholder="Describe what you want the agents to accomplish...
+
+Example:
+Create a complete user authentication system with:
+- Backend API with JWT authentication
+- Frontend login/signup pages
+- Database schema
+- Comprehensive testing"></textarea>
+            </div>
+
+            <button class="btn-primary" onclick="runWorkflow()" id="runBtn">
+                Run Workflow
+            </button>
+        </div>
+
+        <div class="card">
+            <h2>Workflow Execution</h2>
+            <div class="workflow-visual" id="workflowVisual">
+                <div class="empty-state">
+                    <p>Configure and run a workflow to see the execution steps here</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedAgents = new Set();
+
+        // Load agents on page load
+        loadAgents();
+
+        async function loadAgents() {
+            try {
+                // Load default agents
+                const defaultAgents = [
+                    { id: 'pm', name: 'PM Agent', role: 'Project Manager' },
+                    { id: 'backend', name: 'Backend Agent', role: 'Backend Developer' },
+                    { id: 'frontend', name: 'Frontend Agent', role: 'Frontend Developer' },
+                    { id: 'qa', name: 'QA Agent', role: 'Quality Assurance' }
+                ];
+
+                // Load custom agents from API
+                const response = await fetch('/api/agents');
+                const data = await response.json();
+                const customAgents = data.agents || [];
+
+                const allAgents = [...defaultAgents, ...customAgents];
+                renderAgentSelector(allAgents);
+            } catch (error) {
+                console.error('Failed to load agents:', error);
+            }
+        }
+
+        function renderAgentSelector(agents) {
+            const container = document.getElementById('agentSelector');
+            container.innerHTML = agents.map(agent => `
+                <div class="agent-chip" data-agent-id="${agent.id}" onclick="toggleAgent('${agent.id}')">
+                    ${agent.name}
+                </div>
+            `).join('');
+        }
+
+        function toggleAgent(agentId) {
+            const chip = document.querySelector(`[data-agent-id="${agentId}"]`);
+            
+            if (selectedAgents.has(agentId)) {
+                selectedAgents.delete(agentId);
+                chip.classList.remove('selected');
+            } else {
+                selectedAgents.add(agentId);
+                chip.classList.add('selected');
+            }
+        }
+
+        async function runWorkflow() {
+            const input = document.getElementById('workflowInput').value.trim();
+            
+            if (!input) {
+                alert('Please provide a workflow task description');
+                return;
+            }
+            
+            if (selectedAgents.size === 0) {
+                alert('Please select at least one agent');
+                return;
+            }
+
+            const btn = document.getElementById('runBtn');
+            btn.disabled = true;
+            btn.textContent = 'Running Workflow...';
+
+            const visual = document.getElementById('workflowVisual');
+            visual.innerHTML = '<p style="text-align: center; color: #667eea;">⚙️ Initializing workflow...</p>';
+
+            // Get agent names
+            const agentElements = Array.from(selectedAgents).map(id => 
+                document.querySelector(`[data-agent-id="${id}"]`).textContent
+            );
+
+            // Simulate workflow execution
+            let html = '';
+            for (let i = 0; i < agentElements.length; i++) {
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                html += `
+                    <div class="workflow-step">
+                        <div class="icon">✓</div>
+                        <div class="content">
+                            <div class="agent-name">${agentElements[i]}</div>
+                            <div class="status">Processing: ${input.substring(0, 50)}...</div>
+                        </div>
+                    </div>
+                `;
+                
+                if (i < agentElements.length - 1) {
+                    html += '<div class="workflow-arrow">↓</div>';
+                }
+                
+                visual.innerHTML = html;
+            }
+
+            html += `
+                <div style="margin-top: 1.5rem; padding: 1rem; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border-radius: 10px; text-align: center; font-weight: 600;">
+                    ✓ Workflow Completed Successfully
+                </div>
+            `;
+            visual.innerHTML = html;
+
+            btn.disabled = false;
+            btn.textContent = 'Run Workflow';
+        }
+    </script>
+</body>
+</html>
