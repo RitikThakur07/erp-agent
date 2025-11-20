@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import google.generativeai as genai
+from openai import AsyncOpenAI
 import os
 import json
 import re
@@ -18,13 +18,11 @@ import asyncio
 
 load_dotenv()
 
-# Configure Gemini
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+# Configure OpenAI
+client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 app = FastAPI(title="Multi-Agent Code Generator")
-from fastapi import FastAPI
 
-api = FastAPI()
 # CORS
 app.add_middleware(
     CORSMiddleware,
@@ -101,41 +99,28 @@ async def root():
         return HTMLResponse(content=f.read())
 
 
-async def call_gemini(prompt: str) -> str:
-    """Call Gemini API with optimized settings and safety handling"""
-    def _sync_call():
-        model = genai.GenerativeModel(
-            'gemini-2.0-flash-exp',
-            generation_config={
-                'temperature': 0.7,
-                'top_p': 0.95,
-                'top_k': 40,
-                'max_output_tokens': 2048,
-            },
-            safety_settings={
-                'HARM_CATEGORY_HARASSMENT': 'BLOCK_NONE',
-                'HARM_CATEGORY_HATE_SPEECH': 'BLOCK_NONE',
-                'HARM_CATEGORY_SEXUALLY_EXPLICIT': 'BLOCK_NONE',
-                'HARM_CATEGORY_DANGEROUS_CONTENT': 'BLOCK_NONE',
-            }
-        )
-        response = model.generate_content(prompt)
-        
-        # Handle blocked responses
-        if not response.parts:
-            if hasattr(response, 'prompt_feedback'):
-                return f"I apologize, but I cannot process this request. Reason: {response.prompt_feedback}"
-            return "I apologize, but I cannot generate a response for this request. Please try rephrasing."
-        
-        return response.text
-    
+async def call_openai(prompt: str) -> str:
+    """Call OpenAI API with optimized settings"""
     try:
-        return await asyncio.wait_for(asyncio.to_thread(_sync_call), timeout=30.0)
+        response = await asyncio.wait_for(
+            client.chat.completions.create(
+                model="gpt-4o-mini",  # or "gpt-4" for better quality
+                messages=[
+                    {"role": "system", "content": "You are a helpful AI assistant specialized in software development and ERP systems."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7,
+                max_tokens=4096,
+                top_p=0.95
+            ),
+            timeout=60.0
+        )
+        return response.choices[0].message.content
     except asyncio.TimeoutError:
         return "Request timeout. Please try again with a simpler request."
     except Exception as e:
-        print(f"❌ Gemini API Error: {e}")
-        return f"Error generating response. Please try again."
+        print(f"❌ OpenAI API Error: {e}")
+        return f"Error generating response: {str(e)}"
 
 
 @app.websocket("/ws/chat")
@@ -192,8 +177,8 @@ Keep response under 150 words. One question round max."""
             if force_build:
                 pm_response = "Thank you! I have all the requirements. Give me a moment to coordinate with my development team... [READY]"
             else:
-                print("🤖 Calling Gemini API for PM response...")
-                pm_response = await call_gemini(pm_prompt)
+                print("🤖 Calling OpenAI API for PM response...")
+                pm_response = await call_openai(pm_prompt)
                 print(f"✅ PM response received: {pm_response[:100]}...")
             
             # Add PM response to history
@@ -239,7 +224,7 @@ Format:
 
 Keep under 200 words."""
 
-            pm_doc = await call_gemini(pm_doc_prompt)
+            pm_doc = await call_openai(pm_doc_prompt)
             
             # Save PM document
             project_dir = PROJECTS_DIR / project_id
@@ -268,7 +253,7 @@ Return ONLY valid JSON:
 
 Keep code under 200 lines."""
 
-            backend_response = await call_gemini(backend_prompt)
+            backend_response = await call_openai(backend_prompt)
             backend_json = extract_json(backend_response)
             
             if backend_json:
@@ -295,7 +280,7 @@ Return ONLY valid JSON:
 
 Use gradients, modern CSS. Keep each file under 150 lines."""
 
-            frontend_response = await call_gemini(frontend_prompt)
+            frontend_response = await call_openai(frontend_prompt)
             frontend_json = extract_json(frontend_response)
             
             if frontend_json and "files" in frontend_json:
@@ -325,7 +310,7 @@ Provide:
 
 Keep under 150 words."""
 
-            qa_response = await call_gemini(qa_prompt)
+            qa_response = await call_openai(qa_prompt)
             
             qa_file = project_dir / "QA_REPORT.md"
             with open(qa_file, "w", encoding="utf-8") as f:
